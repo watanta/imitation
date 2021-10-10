@@ -36,8 +36,13 @@ def to_label(action):
         elif strs[0] == 'bcity':
             label = 4
     elif strs[0] == "bw" or strs[0] == "bc" or strs[0] == "r": # if citytile
-        unit_id = None
-        label = None
+        unit_id = action  # citytileはidを持たないので、actionそのものを入れて自分を判別
+        if strs[0] == "r":
+            label = 0
+        elif strs[0] == "bw":
+            label = 1
+        elif strs[0] == "bc":
+            label = 2
     else: # transfer
         unit_id = None
         label = None
