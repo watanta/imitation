@@ -36,7 +36,7 @@ def to_label(action):
         elif strs[0] == 'bcity':
             label = 4
     elif strs[0] == "bw" or strs[0] == "bc" or strs[0] == "r": # if citytile
-        unit_id = action  # citytileはidを持たないので、actionそのものを入れて自分を判別
+        unit_id = strs[1]+" "+strs[2] # citytileはidを持たないので、位置を入れて自分を判別
         if strs[0] == "r":
             label = 0
         elif strs[0] == "bw":
@@ -102,7 +102,7 @@ def make_input(obs, unit_id):
     y_shift = (32 - height) // 2
     cities = {}
     
-    b = np.zeros((20, 32, 32), dtype=np.float32)
+    b = np.zeros((22, 32, 32), dtype=np.float32)
     
     for update in obs['updates']:
         strs = update.split(' ')
@@ -132,15 +132,25 @@ def make_input(obs, unit_id):
                 )
         elif input_identifier == 'ct':
             # CityTiles
-            team = int(strs[1])
-            city_id = strs[2]
-            x = int(strs[3]) + x_shift
-            y = int(strs[4]) + y_shift
-            idx = 8 + (team - obs['player']) % 2 * 2
-            b[idx:idx + 2, x, y] = (
-                1,
-                cities[city_id]
-            )
+            citytile_pos = unit_id.split(' ')
+
+            if citytile_pos[0] == strs[3] and citytile_pos[1] == strs[4]:  #　自分自身なら
+                x = int(strs[3]) + x_shift
+                y = int(strs[4]) + y_shift
+                b[20:22, x, y] = (
+                    1,
+                    cities[city_id]
+                )
+            else:
+                team = int(strs[1])
+                city_id = strs[2]
+                x = int(strs[3]) + x_shift
+                y = int(strs[4]) + y_shift
+                idx = 8 + (team - obs['player']) % 2 * 2
+                b[idx:idx + 2, x, y] = (
+                    1,
+                    cities[city_id]
+                )
         elif input_identifier == 'r':
             # Resources
             r_type = strs[1]
@@ -206,7 +216,8 @@ class LuxNet(nn.Module):
     def __init__(self):
         super().__init__()
         layers, filters = 12, 32
-        self.conv0 = BasicConv2d(20, filters, (3, 3), True)
+        input_layers = 22
+        self.conv0 = BasicConv2d(input_layers, filters, (3, 3), True)
         self.blocks = nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)])
         self.head_p = nn.Linear(filters, 5, bias=False)
 
@@ -259,7 +270,7 @@ def train_model(model, dataloaders_dict, criterion, optimizer, num_epochs):
             print(f'Epoch {epoch + 1}/{num_epochs} | {phase:^5} | Loss: {epoch_loss:.4f} | Acc: {epoch_acc:.4f}')
         
         if epoch_acc > best_acc:
-            traced = torch.jit.trace(model.cpu(), torch.rand(1, 20, 32, 32))
+            traced = torch.jit.trace(model.cpu(), torch.rand(1, 22, 32, 32)) # state_shape 何これ？
             traced.save('model.pth')
             best_acc = epoch_acc
 

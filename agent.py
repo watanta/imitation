@@ -15,7 +15,7 @@ def make_input(obs, unit_id):
     y_shift = (32 - height) // 2
     cities = {}
     
-    b = np.zeros((20, 32, 32), dtype=np.float32)
+    b = np.zeros((22, 32, 32), dtype=np.float32)
     
     for update in obs['updates']:
         strs = update.split(' ')
@@ -45,15 +45,25 @@ def make_input(obs, unit_id):
                 )
         elif input_identifier == 'ct':
             # CityTiles
-            team = int(strs[1])
-            city_id = strs[2]
-            x = int(strs[3]) + x_shift
-            y = int(strs[4]) + y_shift
-            idx = 8 + (team - obs['player']) % 2 * 2
-            b[idx:idx + 2, x, y] = (
-                1,
-                cities[city_id]
-            )
+            citytile_pos = unit_id.split(' ')
+
+            if citytile_pos[0] == strs[3] and citytile_pos[1] == strs[4]:  #　自分自身なら
+                x = int(strs[3]) + x_shift
+                y = int(strs[4]) + y_shift
+                b[20:22, x, y] = (
+                    1,
+                    cities[city_id]
+                )
+            else:
+                team = int(strs[1])
+                city_id = strs[2]
+                x = int(strs[3]) + x_shift
+                y = int(strs[4]) + y_shift
+                idx = 8 + (team - obs['player']) % 2 * 2
+                b[idx:idx + 2, x, y] = (
+                    1,
+                    cities[city_id]
+                )
         elif input_identifier == 'r':
             # Resources
             r_type = strs[1]
@@ -72,13 +82,6 @@ def make_input(obs, unit_id):
             fuel = float(strs[3])
             lightupkeep = float(strs[4])
             cities[city_id] = min(fuel / lightupkeep, 10) / 10
-    
-    # Day/Night Cycle
-    b[17, :] = obs['step'] % 40 / 40
-    # Turns
-    b[18, :] = obs['step'] / 360
-    # Map Size
-    b[19, x_shift:32 - x_shift, y_shift:32 - y_shift] = 1
 
     return b
 
@@ -110,7 +113,7 @@ def call_func(obj, method, args=[]):
 
 
 unit_actions = [('move', 'n'), ('move', 's'), ('move', 'w'), ('move', 'e'), ('build_city',)]
-city_actions = [('research',), ('research',), ('research',), ('build_worker',), ('build_cart',)] # unit_actionの大きさに合わせるため
+city_actions = [('research',), ('build_worker',), ('build_cart',), ('research',), ('research',)] # unit_actionの大きさに合わせるため
 
 def get_action(policy, unit, dest, city_tile):
     if unit != None:
@@ -125,7 +128,7 @@ def get_action(policy, unit, dest, city_tile):
     if city_tile != None:
         for label in np.argsort(policy)[::-1]:
             act = city_actions[label]
-            return call_func(unit, *act), None
+            return call_func(city_tile, *act), None
 
 
 
@@ -146,7 +149,7 @@ def agent(observation, configuration):
 
                 policy = p.squeeze(0).numpy()
 
-                action, pos = get_action(policy, unit=None, dest=None, city_tile=city)
+                action, pos = get_action(policy, unit=None, dest=None, city_tile=city_tile)
                 actions.append(action)
     
     # Worker Actions
@@ -159,7 +162,7 @@ def agent(observation, configuration):
 
             policy = p.squeeze(0).numpy()
 
-            action, pos = get_action(policy, unit=unit, dest=dest, citu=None)
+            action, pos = get_action(policy, unit=unit, dest=dest, city_tile=None)
             actions.append(action)
             dest.append(pos)
 
