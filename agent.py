@@ -2,7 +2,6 @@ import os
 import numpy as np
 import torch
 from lux.game import Game
-from test import make_input_citytile, make_input_worker
 
 
 path = '/kaggle_simulations/agent' if os.path.exists('/kaggle_simulations') else '.'

@@ -400,71 +400,71 @@ def train_model(model, dataloaders_dict, criterion, optimizer, num_epochs, model
 
 
 
-if __name__ == "__main__":
 
-    # seed = 42
-    # seed_everything(seed)
 
-    # episode_dir = '/home/ubuntu/work/codes/imitation_learning/input/episodes'
-    # obses, woker_samples, citytile_samples = create_dataset_from_json(episode_dir)
-    # print('obses:', len(obses), 'woker_samples:', len(woker_samples), 'citytile_samples:', len(citytile_samples))
+# seed = 42
+# seed_everything(seed)
 
-    # woker_labels = [sample[-1] for sample in woker_samples]
-    # actions = ['north', 'south', 'west', 'east', 'bcity']
-    # for value, count in zip(*np.unique(woker_labels, return_counts=True)):
-    #     print(f'{actions[value]:^5}: {count:>3}')
+# episode_dir = '/home/ubuntu/work/codes/imitation_learning/input/episodes'
+# obses, woker_samples, citytile_samples = create_dataset_from_json(episode_dir)
+# print('obses:', len(obses), 'woker_samples:', len(woker_samples), 'citytile_samples:', len(citytile_samples))
 
-    # citytile_labels = [sample[-1] for sample in citytile_samples]
-    # actions = ['research', 'build_worker', 'build_cart']
-    # for value, count in zip(*np.unique(citytile_labels, return_counts=True)):
-    #     print(f'{actions[value]:^5}: {count:>3}')
+# woker_labels = [sample[-1] for sample in woker_samples]
+# actions = ['north', 'south', 'west', 'east', 'bcity']
+# for value, count in zip(*np.unique(woker_labels, return_counts=True)):
+#     print(f'{actions[value]:^5}: {count:>3}')
 
-    # model = LuxNet_worker()
-    # train, val = train_test_split(woker_samples, test_size=0.1, random_state=42, stratify=woker_labels)
-    # batch_size = 64
-    # train_loader = DataLoader(
-    #     LuxDataset_worker(obses, train), 
-    #     batch_size=batch_size, 
-    #     shuffle=True, 
-    #     num_workers=2
-    # )
-    # val_loader = DataLoader(
-    #     LuxDataset_worker(obses, val), 
-    #     batch_size=batch_size, 
-    #     shuffle=False, 
-    #     num_workers=2
-    # )
-    # dataloaders_dict = {"train": train_loader, "val": val_loader}
-    # criterion = nn.CrossEntropyLoss()
-    # optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+# citytile_labels = [sample[-1] for sample in citytile_samples]
+# actions = ['research', 'build_worker', 'build_cart']
+# for value, count in zip(*np.unique(citytile_labels, return_counts=True)):
+#     print(f'{actions[value]:^5}: {count:>3}')
 
-    # train_model(model, dataloaders_dict, criterion, optimizer, num_epochs=1, model_type="worker")
+# model = LuxNet_worker()
+# train, val = train_test_split(woker_samples, test_size=0.1, random_state=42, stratify=woker_labels)
+# batch_size = 64
+# train_loader = DataLoader(
+#     LuxDataset_worker(obses, train), 
+#     batch_size=batch_size, 
+#     shuffle=True, 
+#     num_workers=2
+# )
+# val_loader = DataLoader(
+#     LuxDataset_worker(obses, val), 
+#     batch_size=batch_size, 
+#     shuffle=False, 
+#     num_workers=2
+# )
+# dataloaders_dict = {"train": train_loader, "val": val_loader}
+# criterion = nn.CrossEntropyLoss()
+# optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
-    # model = LuxNet_citytile()
-    # train, val = train_test_split(citytile_samples, test_size=0.1, random_state=42, stratify=citytile_labels)
-    # batch_size = 64
-    # train_loader = DataLoader(
-    #     LuxDataset_citytile(obses, train), 
-    #     batch_size=batch_size, 
-    #     shuffle=True, 
-    #     num_workers=2
-    # )
-    # val_loader = DataLoader(
-    #     LuxDataset_citytile(obses, val), 
-    #     batch_size=batch_size, 
-    #     shuffle=False, 
-    #     num_workers=2
-    # )
-    # dataloaders_dict = {"train": train_loader, "val": val_loader}
-    # criterion = nn.CrossEntropyLoss()
-    # optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+# train_model(model, dataloaders_dict, criterion, optimizer, num_epochs=1, model_type="worker")
 
-    # train_model(model, dataloaders_dict, criterion, optimizer, num_epochs=1, model_type="citytile")
+# model = LuxNet_citytile()
+# train, val = train_test_split(citytile_samples, test_size=0.1, random_state=42, stratify=citytile_labels)
+# batch_size = 64
+# train_loader = DataLoader(
+#     LuxDataset_citytile(obses, train), 
+#     batch_size=batch_size, 
+#     shuffle=True, 
+#     num_workers=2
+# )
+# val_loader = DataLoader(
+#     LuxDataset_citytile(obses, val), 
+#     batch_size=batch_size, 
+#     shuffle=False, 
+#     num_workers=2
+# )
+# dataloaders_dict = {"train": train_loader, "val": val_loader}
+# criterion = nn.CrossEntropyLoss()
+# optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
-    from kaggle_environments import make
-    
-    env = make("lux_ai_2021", configuration={"width": 24, "height": 24, "loglevel": 2, "annotations": True}, debug=False)
-    steps = env.run(['agent.py', 'agent.py'])
-    # env.render(mode="ipython", width=1200, height=800)
+# train_model(model, dataloaders_dict, criterion, optimizer, num_epochs=1, model_type="citytile")
 
-    pass
+from kaggle_environments import make
+
+env = make("lux_ai_2021", configuration={"width": 24, "height": 24, "loglevel": 2, "annotations": True}, debug=False)
+steps = env.run(['agent.py', 'agent.py'])
+# env.render(mode="ipython", width=1200, height=800)
+
+pass
