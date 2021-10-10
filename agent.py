@@ -2,20 +2,24 @@ import os
 import numpy as np
 import torch
 from lux.game import Game
+from test import make_input_citytile, make_input_worker
 
 
 path = '/kaggle_simulations/agent' if os.path.exists('/kaggle_simulations') else '.'
-model = torch.jit.load(f'{path}/model.pth')
-model.eval()
+worker_model = torch.jit.load(f'{path}/woker_model.pth')
+worker_model.eval()
+
+citytile_model = torch.jit.load(f'{path}/citytile_model.pth')
+citytile_model.eval()
 
 
-def make_input(obs, unit_id):
+def make_input_worker(obs, unit_id):
     width, height = obs['width'], obs['height']
     x_shift = (32 - width) // 2
     y_shift = (32 - height) // 2
     cities = {}
     
-    b = np.zeros((22, 32, 32), dtype=np.float32)
+    b = np.zeros((20, 32, 32), dtype=np.float32)
     
     for update in obs['updates']:
         strs = update.split(' ')
@@ -45,12 +49,78 @@ def make_input(obs, unit_id):
                 )
         elif input_identifier == 'ct':
             # CityTiles
+            team = int(strs[1])
+            city_id = strs[2]
+            x = int(strs[3]) + x_shift
+            y = int(strs[4]) + y_shift
+            idx = 8 + (team - obs['player']) % 2 * 2
+            b[idx:idx + 2, x, y] = (
+                1,
+                cities[city_id]
+            )
+        elif input_identifier == 'r':
+            # Resources
+            r_type = strs[1]
+            x = int(strs[2]) + x_shift
+            y = int(strs[3]) + y_shift
+            amt = int(float(strs[4]))
+            b[{'wood': 12, 'coal': 13, 'uranium': 14}[r_type], x, y] = amt / 800
+        elif input_identifier == 'rp':
+            # Research Points
+            team = int(strs[1])
+            rp = int(strs[2])
+            b[15 + (team - obs['player']) % 2, :] = min(rp, 200) / 200
+        elif input_identifier == 'c':
+            # Cities
+            city_id = strs[2]
+            fuel = float(strs[3])
+            lightupkeep = float(strs[4])
+            cities[city_id] = min(fuel / lightupkeep, 10) / 10
+    
+    # Day/Night Cycle
+    b[17, :] = obs['step'] % 40 / 40
+    # Turns
+    b[18, :] = obs['step'] / 360
+    # Map Size
+    b[19, x_shift:32 - x_shift, y_shift:32 - y_shift] = 1
+
+    return b
+
+def make_input_citytile(obs, unit_id):
+    width, height = obs['width'], obs['height']
+    x_shift = (32 - width) // 2
+    y_shift = (32 - height) // 2
+    cities = {}
+    
+    b = np.zeros((20, 32, 32), dtype=np.float32)
+    
+    for update in obs['updates']:
+        strs = update.split(' ')
+        input_identifier = strs[0]
+        
+        if input_identifier == 'u':
+            x = int(strs[4]) + x_shift
+            y = int(strs[5]) + y_shift
+            wood = int(strs[7])
+            coal = int(strs[8])
+            uranium = int(strs[9])
+            # Units
+            team = int(strs[2])
+            cooldown = float(strs[6])
+            idx = 2 + (team - obs['player']) % 2 * 3
+            b[idx:idx + 3, x, y] = (
+                1,
+                cooldown / 6,
+                (wood + coal + uranium) / 100
+            )
+        elif input_identifier == 'ct':
+            # CityTiles
             citytile_pos = unit_id.split(' ')
 
             if citytile_pos[0] == strs[3] and citytile_pos[1] == strs[4]:  #　自分自身なら
                 x = int(strs[3]) + x_shift
                 y = int(strs[4]) + y_shift
-                b[20:22, x, y] = (
+                b[:2, x, y] = (
                     1,
                     cities[city_id]
                 )
@@ -82,6 +152,13 @@ def make_input(obs, unit_id):
             fuel = float(strs[3])
             lightupkeep = float(strs[4])
             cities[city_id] = min(fuel / lightupkeep, 10) / 10
+    
+    # Day/Night Cycle
+    b[17, :] = obs['step'] % 40 / 40
+    # Turns
+    b[18, :] = obs['step'] / 360
+    # Map Size
+    b[19, x_shift:32 - x_shift, y_shift:32 - y_shift] = 1
 
     return b
 
@@ -113,22 +190,22 @@ def call_func(obj, method, args=[]):
 
 
 unit_actions = [('move', 'n'), ('move', 's'), ('move', 'w'), ('move', 'e'), ('build_city',)]
-city_actions = [('research',), ('build_worker',), ('build_cart',), ('research',), ('research',)] # unit_actionの大きさに合わせるため
+def get_action_worker(policy, unit, dest):
+    for label in np.argsort(policy)[::-1]:
+        act = unit_actions[label]
+        pos = unit.pos.translate(act[-1], 1) or unit.pos # 移動できたかそのままか
+        if pos not in dest or in_city(pos):
+            return call_func(unit, *act), pos 
+        
+    return unit.move('c'), unit.pos
 
-def get_action(policy, unit, dest, city_tile):
-    if unit != None:
-        for label in np.argsort(policy)[::-1]:
-            act = unit_actions[label]
-            pos = unit.pos.translate(act[-1], 1) or unit.pos # 移動できたかそのままか
-            if pos not in dest or in_city(pos):
-                return call_func(unit, *act), pos 
-            
-        return unit.move('c'), unit.pos
 
-    if city_tile != None:
-        for label in np.argsort(policy)[::-1]:
-            act = city_actions[label]
-            return call_func(city_tile, *act), None
+
+city_actions = [('research',), ('build_worker',)] # unit_actionの大きさに合わせるため
+def get_action_citytile(policy, city_tile):
+    for label in np.argsort(policy)[::-1]:
+        act = city_actions[label]
+        return call_func(city_tile, *act), None
 
 
 
@@ -143,26 +220,26 @@ def agent(observation, configuration):
     for city in player.cities.values():
         for city_tile in city.citytiles:
             if city_tile.can_act():
-                state = make_input(observation, city_tile.cityid)
+                state = make_input_citytile(observation, city_tile.cityid)
                 with torch.no_grad():
-                    p = model(torch.from_numpy(state).unsqueeze(0))
+                    p = citytile_model(torch.from_numpy(state).unsqueeze(0))
 
                 policy = p.squeeze(0).numpy()
 
-                action, pos = get_action(policy, unit=None, dest=None, city_tile=city_tile)
+                action, pos = get_action_citytile(policy, city_tile=city_tile)
                 actions.append(action)
     
     # Worker Actions
     dest = []
     for unit in player.units:
         if unit.can_act() and (game_state.turn % 40 < 30 or not in_city(unit.pos)):
-            state = make_input(observation, unit.id)
+            state = make_input_worker(observation, unit.id)
             with torch.no_grad():
-                p = model(torch.from_numpy(state).unsqueeze(0))
+                p = worker_model(torch.from_numpy(state).unsqueeze(0))
 
             policy = p.squeeze(0).numpy()
 
-            action, pos = get_action(policy, unit=unit, dest=dest, city_tile=None)
+            action, pos = get_action_worker(policy, unit=unit, dest=dest)
             actions.append(action)
             dest.append(pos)
 
