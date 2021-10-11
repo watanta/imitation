@@ -2,14 +2,80 @@ import os
 import numpy as np
 import torch
 from lux.game import Game
+from torch import nn
+import torch.nn.functional as F
+
+# Neural Network for Lux AI
+class BasicConv2d(nn.Module):
+    def __init__(self, input_dim, output_dim, kernel_size, bn):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            input_dim, output_dim, 
+            kernel_size=kernel_size, 
+            padding=(kernel_size[0] // 2, kernel_size[1] // 2)
+        )
+        self.bn = nn.BatchNorm2d(output_dim) if bn else None
+
+    def forward(self, x):
+        h = self.conv(x)
+        h = self.bn(h) if self.bn is not None else h
+        return h
+
+
+class LuxNet_worker(nn.Module):
+    def __init__(self):
+        super().__init__()
+        layers, filters = 12, 32
+        input_layers = 20
+        action_num = 5
+        self.conv0 = BasicConv2d(input_layers, filters, (3, 3), True)
+        self.blocks = nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)])
+        self.head_p = nn.Linear(filters, action_num, bias=False)
+
+    def forward(self, x):
+        h = F.relu_(self.conv0(x))
+        for block in self.blocks:
+            h = F.relu_(h + block(h))
+        h_head = (h * x[:,:1]).view(h.size(0), h.size(1), -1).sum(-1)
+        p = self.head_p(h_head)
+        return p
+
+class LuxNet_citytile(nn.Module):
+    def __init__(self):
+        super().__init__()
+        layers, filters = 12, 32
+        input_layers = 20
+        action_num = 2 # build_cart なし
+        self.conv0 = BasicConv2d(input_layers, filters, (3, 3), True)
+        self.blocks = nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)])
+        self.head_p = nn.Linear(filters, action_num, bias=False)
+
+    def forward(self, x):
+        h = F.relu_(self.conv0(x))
+        for block in self.blocks:
+            h = F.relu_(h + block(h))
+        h_head = (h * x[:,:1]).view(h.size(0), h.size(1), -1).sum(-1)
+        p = self.head_p(h_head)
+        return p
+
+# path = '/kaggle_simulations/agent' if os.path.exists('/kaggle_simulations') else '.'
+# path = "."
+# worker_model = torch.jit.load(f'{path}/worker_model.pth')
+# worker_model.eval()
+
+# citytile_model = torch.jit.load(f'{path}/citytile_model.pth')
+# citytile_model.eval()
 
 
 path = '/kaggle_simulations/agent' if os.path.exists('/kaggle_simulations') else '.'
-worker_model = torch.jit.load(f'{path}/woker_model.pth')
+citytile_model = LuxNet_citytile()
+citytile_model.load_state_dict(torch.load(f'{path}/citytile_state_dict'))
+citytile_model.eval()
+
+worker_model = LuxNet_worker()
+worker_model.load_state_dict(torch.load(f'{path}/worker_state_dict'))
 worker_model.eval()
 
-citytile_model = torch.jit.load(f'{path}/citytile_model.pth')
-citytile_model.eval()
 
 
 def make_input_worker(obs, unit_id):
@@ -199,13 +265,11 @@ def get_action_worker(policy, unit, dest):
     return unit.move('c'), unit.pos
 
 
-
-city_actions = [('research',), ('build_worker',)] # unit_actionの大きさに合わせるため
+city_actions = [('research',), ('build_worker',)] 
 def get_action_citytile(policy, city_tile):
     for label in np.argsort(policy)[::-1]:
         act = city_actions[label]
         return call_func(city_tile, *act), None
-
 
 
 def agent(observation, configuration):
@@ -219,7 +283,8 @@ def agent(observation, configuration):
     for city in player.cities.values():
         for city_tile in city.citytiles:
             if city_tile.can_act():
-                state = make_input_citytile(observation, city_tile.cityid)
+                citytile_pos = f"{city_tile.pos.x} {city_tile.pos.y}"
+                state = make_input_citytile(observation, citytile_pos)
                 with torch.no_grad():
                     p = citytile_model(torch.from_numpy(state).unsqueeze(0))
 

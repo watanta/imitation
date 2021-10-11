@@ -36,7 +36,7 @@ def to_label_for_citytile(action):
             label = 1
         elif strs[0] == "bc":
             label = 2
-    else: # transfer
+    else: 
         unit_id = None
         label = None
     return unit_id, label
@@ -49,7 +49,7 @@ def to_label_for_worker(action):
     elif strs[0] == 'bcity':
         label = 4
     else:
-        label = None
+        label = None #transfer
     return unit_id, label
 
 
@@ -395,6 +395,7 @@ def train_model(model, dataloaders_dict, criterion, optimizer, num_epochs, model
 
             traced = torch.jit.trace(model.cpu(), torch.rand(1, 20, 32, 32)) # state_shape 何これ？
             traced.save(f'{model_type}_model.pth')
+            torch.save(model.state_dict(), f'{model_type}_state_dict')
             best_acc = epoch_acc
 
 
