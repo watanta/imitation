@@ -283,14 +283,17 @@ def agent(observation, configuration):
     for city in player.cities.values():
         for city_tile in city.citytiles:
             if city_tile.can_act():
-                citytile_pos = f"{city_tile.pos.x} {city_tile.pos.y}"
-                state = make_input_citytile(observation, citytile_pos)
-                with torch.no_grad():
-                    p = citytile_model(torch.from_numpy(state).unsqueeze(0))
+                if not player.researched_uranium():
+                    citytile_pos = f"{city_tile.pos.x} {city_tile.pos.y}"
+                    state = make_input_citytile(observation, citytile_pos)
+                    with torch.no_grad():
+                        p = citytile_model(torch.from_numpy(state).unsqueeze(0))
 
-                policy = p.squeeze(0).numpy()
+                    policy = p.squeeze(0).numpy()
 
-                action, pos = get_action_citytile(policy, city_tile=city_tile)
+                    action, _ = get_action_citytile(policy, city_tile=city_tile)
+                else: # research完了してたらbuildworker
+                    action = city_tile.build_worker()
                 actions.append(action)
     
     # Worker Actions
