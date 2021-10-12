@@ -209,17 +209,22 @@ class LuxNet(nn.Module):
         input_layers = 20
         hidden_head_num = 128
         action_num = 5
-        self.conv0 = BasicConv2d(input_layers, filters, (3, 3), True)
-        self.blocks = nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)])
-        self.head_p = nn.Linear(filters, hidden_head_num, bias=False)
+        # state_dict_loadするときに名前を合わせるためfeature_extractorで包む
+        self.feature_extractor = nn.Sequential()
+        self.feature_extractor.add_module("conv0", BasicConv2d(input_layers, filters, (3, 3), True))
+        self.feature_extractor.add_module("blocks", nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)]))
+        self.feature_extractor.add_module("head_p", nn.Linear(filters, hidden_head_num, bias=False))
+        # self.conv0 = BasicConv2d(input_layers, filters, (3, 3), True)
+        # self.blocks = nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)])
+        # self.head_p = nn.Linear(filters, hidden_head_num, bias=False)
         self.action_net = nn.Linear(hidden_head_num, action_num, bias=True)
 
     def forward(self, x):
-        h = F.relu_(self.conv0(x))
-        for block in self.blocks:
+        h = F.relu_(self.self.feature_extractor["conv0"](x))
+        for block in self.self.feature_extractor["blocks"]:
             h = F.relu_(h + block(h))
         h_head = (h * x[:,:1]).view(h.size(0), h.size(1), -1).sum(-1)
-        p = self.head_p(h_head)
+        p = self.self.feature_extractor["head_p"](h_head)
         p = self.action_net(p)
         return p
 
