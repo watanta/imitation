@@ -15,7 +15,7 @@ def make_input(obs, unit_id):
     y_shift = (32 - height) // 2
     cities = {}
     
-    b = np.zeros((22, 32, 32), dtype=np.float32)
+    b = np.zeros((20, 32, 32), dtype=np.float32)
     
     for update in obs['updates']:
         strs = update.split(' ')
@@ -45,25 +45,15 @@ def make_input(obs, unit_id):
                 )
         elif input_identifier == 'ct':
             # CityTiles
-            citytile_pos = unit_id.split(' ')
-
-            if citytile_pos[0] == strs[3] and citytile_pos[1] == strs[4]:  #　自分自身なら
-                x = int(strs[3]) + x_shift
-                y = int(strs[4]) + y_shift
-                b[20:22, x, y] = (
-                    1,
-                    cities[city_id]
-                )
-            else:
-                team = int(strs[1])
-                city_id = strs[2]
-                x = int(strs[3]) + x_shift
-                y = int(strs[4]) + y_shift
-                idx = 8 + (team - obs['player']) % 2 * 2
-                b[idx:idx + 2, x, y] = (
-                    1,
-                    cities[city_id]
-                )
+            team = int(strs[1])
+            city_id = strs[2]
+            x = int(strs[3]) + x_shift
+            y = int(strs[4]) + y_shift
+            idx = 8 + (team - obs['player']) % 2 * 2
+            b[idx:idx + 2, x, y] = (
+                1,
+                cities[city_id]
+            )
         elif input_identifier == 'r':
             # Resources
             r_type = strs[1]
@@ -82,6 +72,13 @@ def make_input(obs, unit_id):
             fuel = float(strs[3])
             lightupkeep = float(strs[4])
             cities[city_id] = min(fuel / lightupkeep, 10) / 10
+    
+    # Day/Night Cycle
+    b[17, :] = obs['step'] % 40 / 40
+    # Turns
+    b[18, :] = obs['step'] / 360
+    # Map Size
+    b[19, x_shift:32 - x_shift, y_shift:32 - y_shift] = 1
 
     return b
 
@@ -113,23 +110,14 @@ def call_func(obj, method, args=[]):
 
 
 unit_actions = [('move', 'n'), ('move', 's'), ('move', 'w'), ('move', 'e'), ('build_city',)]
-city_actions = [('research',), ('build_worker',), ('build_cart',), ('research',), ('research',)] # unit_actionの大きさに合わせるため
-
-def get_action(policy, unit, dest, city_tile):
-    if unit != None:
-        for label in np.argsort(policy)[::-1]:
-            act = unit_actions[label]
-            pos = unit.pos.translate(act[-1], 1) or unit.pos # 移動できたかそのままか
-            if pos not in dest or in_city(pos):
-                return call_func(unit, *act), pos 
+def get_action(policy, unit, dest):
+    for label in np.argsort(policy)[::-1]:
+        act = unit_actions[label]
+        pos = unit.pos.translate(act[-1], 1) or unit.pos
+        if pos not in dest or in_city(pos):
+            return call_func(unit, *act), pos 
             
-        return unit.move('c'), unit.pos
-
-    if city_tile != None:
-        for label in np.argsort(policy)[::-1]:
-            act = city_actions[label]
-            return call_func(city_tile, *act), None
-
+    return unit.move('c'), unit.pos
 
 
 def agent(observation, configuration):
@@ -140,17 +128,16 @@ def agent(observation, configuration):
     actions = []
     
     # City Actions
+    unit_count = len(player.units)
     for city in player.cities.values():
         for city_tile in city.citytiles:
             if city_tile.can_act():
-                state = make_input(observation, city_tile.cityid)
-                with torch.no_grad():
-                    p = model(torch.from_numpy(state).unsqueeze(0))
-
-                policy = p.squeeze(0).numpy()
-
-                action, pos = get_action(policy, unit=None, dest=None, city_tile=city_tile)
-                actions.append(action)
+                if unit_count < player.city_tile_count: 
+                    actions.append(city_tile.build_worker())
+                    unit_count += 1
+                elif not player.researched_uranium():
+                    actions.append(city_tile.research())
+                    player.research_points += 1
     
     # Worker Actions
     dest = []
@@ -162,7 +149,7 @@ def agent(observation, configuration):
 
             policy = p.squeeze(0).numpy()
 
-            action, pos = get_action(policy, unit=unit, dest=dest, city_tile=None)
+            action, pos = get_action(policy, unit, dest)
             actions.append(action)
             dest.append(pos)
 
