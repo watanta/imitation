@@ -205,26 +205,26 @@ class BasicConv2d(nn.Module):
 class LuxNet(nn.Module):
     def __init__(self):
         super().__init__()
-        layers, filters = 8, 32
+        layers, filters = 3, 32
         input_layers = 20
         hidden_head_num = 128
         action_num = 5
-        # state_dict_loadするときに名前を合わせるためfeature_extractorで包む
-        self.feature_extractor = nn.Sequential()
-        self.feature_extractor.add_module("conv0", BasicConv2d(input_layers, filters, (3, 3), True))
-        self.feature_extractor.add_module("blocks", nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)]))
-        self.feature_extractor.add_module("head_p", nn.Linear(filters, hidden_head_num, bias=False))
+        # state_dict_loadするときに名前を合わせるためfeatures_extractorで包む
+        self.features_extractor = nn.Sequential()
+        self.features_extractor.add_module("conv0", BasicConv2d(input_layers, filters, (3, 3), True))
+        self.features_extractor.add_module("blocks", nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)]))
+        self.features_extractor.add_module("head_p", nn.Linear(filters, hidden_head_num, bias=False))
         # self.conv0 = BasicConv2d(input_layers, filters, (3, 3), True)
         # self.blocks = nn.ModuleList([BasicConv2d(filters, filters, (3, 3), True) for _ in range(layers)])
         # self.head_p = nn.Linear(filters, hidden_head_num, bias=False)
         self.action_net = nn.Linear(hidden_head_num, action_num, bias=True)
 
     def forward(self, x):
-        h = F.relu_(self.self.feature_extractor["conv0"](x))
-        for block in self.self.feature_extractor["blocks"]:
+        h = F.relu_(self.features_extractor[0](x))
+        for block in self.features_extractor[1]:
             h = F.relu_(h + block(h))
         h_head = (h * x[:,:1]).view(h.size(0), h.size(1), -1).sum(-1)
-        p = self.self.feature_extractor["head_p"](h_head)
+        p = self.features_extractor[2](h_head)
         p = self.action_net(p)
         return p
 
@@ -271,7 +271,7 @@ def train_model(model, dataloaders_dict, criterion, optimizer, num_epochs):
         if epoch_acc > best_acc:
             traced = torch.jit.trace(model.cpu(), torch.rand(1, 20, 32, 32)) # state_shape 何これ？
             traced.save('model.pth')
-            torch.save(model.state_dict(), f'model_state_dict')
+            torch.save(model.state_dict(), f'model_cnn_lyaer3_state_dict.pth')
             best_acc = epoch_acc
 
 
@@ -310,10 +310,10 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
-    train_model(model, dataloaders_dict, criterion, optimizer, num_epochs=1)
+    train_model(model, dataloaders_dict, criterion, optimizer, num_epochs=15)
 
-    # from kaggle_environments import make
+    from kaggle_environments import make
     
-    # env = make("lux_ai_2021", configuration={"width": 24, "height": 24, "loglevel": 2, "annotations": True}, debug=False)
-    # steps = env.run(['agent.py', 'agent.py'])
-    # env.render(mode="ipython", width=1200, height=800)
+    env = make("lux_ai_2021", configuration={"width": 24, "height": 24, "loglevel": 2, "annotations": True}, debug=False)
+    steps = env.run(['agent.py', 'agent.py'])
+    env.render(mode="ipython", width=1200, height=800)
