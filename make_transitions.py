@@ -1,4 +1,6 @@
 import sys
+
+from torch._C import ThroughputBenchmark
 print(sys.version)
 
 import numpy as np
@@ -95,6 +97,89 @@ def create_dataset_from_json(episode_dir, team_name='Toad Brigade'):
 
     return obses, samples
 
+def make_input(obs, unit_id):
+    width, height = obs['width'], obs['height']
+    x_shift = (32 - width) // 2
+    y_shift = (32 - height) // 2
+    cities = {}
+    
+    b = np.zeros((22, 32, 32), dtype=np.float32)
+    
+    for update in obs['updates']:
+        strs = update.split(' ')
+        input_identifier = strs[0]
+        
+        if input_identifier == 'u':
+            x = int(strs[4]) + x_shift
+            y = int(strs[5]) + y_shift
+            wood = int(strs[7])
+            coal = int(strs[8])
+            uranium = int(strs[9])
+            if unit_id == strs[3]:
+                # Position and Cargo
+                b[:2, x, y] = (
+                    1,
+                    (wood + coal + uranium) / 100
+                )
+            else:
+                # Units
+                team = int(strs[2])
+                cooldown = float(strs[6])
+                idx = 2 + (team - obs['player']) % 2 * 3
+                b[idx:idx + 3, x, y] = (
+                    1,
+                    cooldown / 6,
+                    (wood + coal + uranium) / 100
+                )
+        elif input_identifier == 'ct':
+            # CityTiles
+            citytile_pos = unit_id.split(' ')
+
+            if citytile_pos[0] == strs[3] and citytile_pos[1] == strs[4]:  #　自分自身なら
+                x = int(strs[3]) + x_shift
+                y = int(strs[4]) + y_shift
+                b[20:22, x, y] = (
+                    1,
+                    cities[city_id]
+                )
+            else:
+                team = int(strs[1])
+                city_id = strs[2]
+                x = int(strs[3]) + x_shift
+                y = int(strs[4]) + y_shift
+                idx = 8 + (team - obs['player']) % 2 * 2
+                b[idx:idx + 2, x, y] = (
+                    1,
+                    cities[city_id]
+                )
+        elif input_identifier == 'r':
+            # Resources
+            r_type = strs[1]
+            x = int(strs[2]) + x_shift
+            y = int(strs[3]) + y_shift
+            amt = int(float(strs[4]))
+            b[{'wood': 12, 'coal': 13, 'uranium': 14}[r_type], x, y] = amt / 800
+        elif input_identifier == 'rp':
+            # Research Points
+            team = int(strs[1])
+            rp = int(strs[2])
+            b[15 + (team - obs['player']) % 2, :] = min(rp, 200) / 200
+        elif input_identifier == 'c':
+            # Cities
+            city_id = strs[2]
+            fuel = float(strs[3])
+            lightupkeep = float(strs[4])
+            cities[city_id] = min(fuel / lightupkeep, 10) / 10
+    
+    # Day/Night Cycle
+    b[17, :] = obs['step'] % 40 / 40
+    # Turns
+    b[18, :] = obs['step'] / 360
+    # Map Size
+    b[19, x_shift:32 - x_shift, y_shift:32 - y_shift] = 1
+
+    return b
+
 
 if __name__ == "__main__":
 
@@ -120,20 +205,17 @@ if __name__ == "__main__":
         print(f'{actions[value]:^5}: {count:>3}')
 
     trainsitions = []
-    unique_episodes = get_unique_episodes(obses)
-    for episode in unique_episodes:
-        obs_in_episode = get_obs_in_epidode(obses)
-        for obs in obses:
-            # BCではobsとactsだけ使う
-            transition = {"obs":None, "acts":None, "next_obs":None, "dones":None, "infos":None} 
-            transition["obs"] = obs
-            transition["acts"] = get_sample_of_obs(obs)[2]
-            transition["dones"] = is_done_obs(ons)
-            if trainsition["dones"] = True:
-                transition["next_obs"] = None
-            else:
-                trainsition["next_obs"] = next(obs)
-            transition["infos"] = None
+    acts = []
+    obs = []
+    for sample in samples:
+        acts.append(sample[2])
+        obs.append(make_input(obses[sample[0]], sample[1]))
+    #BCはobsとactsしか使わないので他は適当
+    trajectory_length = len(sample)
+    cat_parts = {"obs":obs, "acts":actions, "next_obs":np.zeros((trajectory_length,20,32,32)), "dones":np.array([True]*trajectory_length), "infos":tp.array([{}]*trajectory_length)}
+    transitions = types.Transitions(**cat_parts)
+
+
 
 
 
