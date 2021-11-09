@@ -77,7 +77,7 @@ def create_dataset_from_json(episode_dir, team_name='Toad Brigade'):
     woker_samples = []
     citytile_samples = []
     
-    episodes = [path for path in Path(episode_dir).glob('*.json') if 'output' not in path.name]
+    episodes = [path for path in Path(episode_dir).glob('????????.json') if 'output' not in path.name]
     for filepath in tqdm(episodes): 
         with open(filepath) as f:
             json_load = json.load(f)
@@ -401,24 +401,24 @@ def train_model(model, dataloaders_dict, criterion, optimizer, num_epochs, model
 
 
 
+if __name__ == "__main__":
 
+    seed = 42
+    seed_everything(seed)
 
-# seed = 42
-# seed_everything(seed)
+    episode_dir = '/home/ubuntu/work/codes/imitation_learning/input/episodes'
+    obses, woker_samples, citytile_samples = create_dataset_from_json(episode_dir)
+    print('obses:', len(obses), 'woker_samples:', len(woker_samples), 'citytile_samples:', len(citytile_samples))
 
-# episode_dir = '/home/ubuntu/work/codes/imitation_learning/input/episodes'
-# obses, woker_samples, citytile_samples = create_dataset_from_json(episode_dir)
-# print('obses:', len(obses), 'woker_samples:', len(woker_samples), 'citytile_samples:', len(citytile_samples))
+    woker_labels = [sample[-1] for sample in woker_samples]
+    actions = ['north', 'south', 'west', 'east', 'bcity']
+    for value, count in zip(*np.unique(woker_labels, return_counts=True)):
+        print(f'{actions[value]:^5}: {count:>3}')
 
-# woker_labels = [sample[-1] for sample in woker_samples]
-# actions = ['north', 'south', 'west', 'east', 'bcity']
-# for value, count in zip(*np.unique(woker_labels, return_counts=True)):
-#     print(f'{actions[value]:^5}: {count:>3}')
-
-# citytile_labels = [sample[-1] for sample in citytile_samples]
-# actions = ['research', 'build_worker', 'build_cart']
-# for value, count in zip(*np.unique(citytile_labels, return_counts=True)):
-#     print(f'{actions[value]:^5}: {count:>3}')
+    citytile_labels = [sample[-1] for sample in citytile_samples]
+    actions = ['research', 'build_worker', 'build_cart']
+    for value, count in zip(*np.unique(citytile_labels, return_counts=True)):
+        print(f'{actions[value]:^5}: {count:>3}')
 
 # model = LuxNet_worker()
 # train, val = train_test_split(woker_samples, test_size=0.1, random_state=42, stratify=woker_labels)
