@@ -398,6 +398,19 @@ def train_model(model, dataloaders_dict, criterion, optimizer, num_epochs, model
             torch.save(model.state_dict(), f'{model_type}_state_dict')
             best_acc = epoch_acc
 
+def get_all_submit_ids(episode_dir):
+    submit_id_set = set([])
+    episodes = [path for path in Path(episode_dir).glob('????????_info.json') if 'output' not in path.name]
+    for filepath in tqdm(episodes): 
+        with open(filepath) as f:
+            json_load = json.load(f)
+        player0 = json_load["agents"][0]["submissionId"]
+        player1 = json_load["agents"][0]["submissionId"]
+        submit_id_set.add(player0)
+        submit_id_set.add(player1)
+    return submit_id_set
+
+        
 
 
 
@@ -406,19 +419,28 @@ if __name__ == "__main__":
     seed = 42
     seed_everything(seed)
 
-    episode_dir = '/home/ubuntu/work/codes/imitation_learning/input/episodes'
-    obses, woker_samples, citytile_samples = create_dataset_from_json(episode_dir)
-    print('obses:', len(obses), 'woker_samples:', len(woker_samples), 'citytile_samples:', len(citytile_samples))
+    
 
-    woker_labels = [sample[-1] for sample in woker_samples]
-    actions = ['north', 'south', 'west', 'east', 'bcity']
-    for value, count in zip(*np.unique(woker_labels, return_counts=True)):
-        print(f'{actions[value]:^5}: {count:>3}')
+    episode_dir = '/home/ubuntu/work/codes/imitation_learning/archive'
+    submit_ids = get_all_submit_ids(episode_dir)
+    for submit_id in submit_ids:
+        max_score = get_max_score(submit_id)
+        print(f"max score is {max_score} of {submit_id}")
+    obses, woker_samples, citytile_samples = create_dataset_from_submit_id(submit_id[0])
 
-    citytile_labels = [sample[-1] for sample in citytile_samples]
-    actions = ['research', 'build_worker', 'build_cart']
-    for value, count in zip(*np.unique(citytile_labels, return_counts=True)):
-        print(f'{actions[value]:^5}: {count:>3}')
+
+    # obses, woker_samples, citytile_samples = create_dataset_from_json(episode_dir)
+    # print('obses:', len(obses), 'woker_samples:', len(woker_samples), 'citytile_samples:', len(citytile_samples))
+
+    # woker_labels = [sample[-1] for sample in woker_samples]
+    # actions = ['north', 'south', 'west', 'east', 'bcity']
+    # for value, count in zip(*np.unique(woker_labels, return_counts=True)):
+    #     print(f'{actions[value]:^5}: {count:>3}')
+
+    # citytile_labels = [sample[-1] for sample in citytile_samples]
+    # actions = ['research', 'build_worker', 'build_cart']
+    # for value, count in zip(*np.unique(citytile_labels, return_counts=True)):
+    #     print(f'{actions[value]:^5}: {count:>3}')
 
 # model = LuxNet_worker()
 # train, val = train_test_split(woker_samples, test_size=0.1, random_state=42, stratify=woker_labels)
