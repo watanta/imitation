@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
+import pandas as pd
 
 def seed_everything(seed_value):
     random.seed(seed_value)
@@ -410,7 +411,22 @@ def get_all_submit_ids(episode_dir):
         submit_id_set.add(player1)
     return submit_id_set
 
-        
+def get_max_score(submit_id):
+    max_score = -1000
+    episodes = [path for path in Path(episode_dir).glob('????????_info.json') if 'output' not in path.name]
+    for filepath in tqdm(episodes): 
+        with open(filepath) as f:
+            json_load = json.load(f)
+        player0 = json_load["agents"][0]["submissionId"]
+        player1 = json_load["agents"][1]["submissionId"]
+        if player0 == submit_id:
+            max_score = max(max_score, json_load["agents"][0]["updatedScore"])
+        elif player1 == submit_id:
+            max_score = max(max_score, json_load["agents"][1]["updatedScore"])
+        else:
+            pass
+    return max_score
+
 
 
 
@@ -423,9 +439,14 @@ if __name__ == "__main__":
 
     episode_dir = '/home/ubuntu/work/codes/imitation_learning/archive'
     submit_ids = get_all_submit_ids(episode_dir)
+    max_scores = []
     for submit_id in submit_ids:
         max_score = get_max_score(submit_id)
-        print(f"max score is {max_score} of {submit_id}")
+        max_scores.append(max_score)
+        # print(f"max score is {max_score} of {submit_id}")
+    max_scores_df = pd.DataFrame([submit_ids, max_scores]).T
+    max_scores_df.columns = ["submissionId", "max_score"]
+    max_scores_df = max_scores_df.sort_values("max_score",ascending=False)
     obses, woker_samples, citytile_samples = create_dataset_from_submit_id(submit_id[0])
 
 
