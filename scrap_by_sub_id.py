@@ -411,7 +411,7 @@ def get_all_submit_ids(episode_dir):
         submit_id_set.add(player1)
     return submit_id_set
 
-def get_max_score(submit_id):
+def get_max_score(submit_id, episode_dir):
     max_score = -1000
     episodes = [path for path in Path(episode_dir).glob('????????_info.json') if 'output' not in path.name]
     for filepath in tqdm(episodes): 
@@ -428,6 +428,60 @@ def get_max_score(submit_id):
     return max_score
 
 
+def get_all_episode_ids(submit_id, episode_dir):
+    episode_ids = []
+    episodes = [path for path in Path(episode_dir).glob('????????_info.json') if 'output' not in path.name]
+    for filepath in tqdm(episodes): 
+        with open(filepath) as f:
+            json_load = json.load(f)
+        if int(submit_id) == json_load["agents"][0]["submissionId"]:
+            episode_ids.append(json_load["id"])
+    return episode_ids
+
+
+def create_dataset_from_submit_id(submit_id, episode_dir):
+    obses = {}
+    woker_samples = []
+    citytile_samples = []
+
+    episode_ids = get_all_episode_ids(submit_id, episode_dir)
+    episodes = [episode_dir+"/"+str(episode_id)+".json" for episode_id in episode_ids]
+    for filepath in tqdm(episodes): 
+        with open(filepath) as f:
+            json_load = json.load(f)
+
+        ep_id = json_load['info']['EpisodeId']
+        index = np.argmax([r or 0 for r in json_load['rewards']])
+
+        for i in range(len(json_load['steps'])-1):
+            if json_load['steps'][i][index]['status'] == 'ACTIVE':
+                actions = json_load['steps'][i+1][index]['action']
+                obs = json_load['steps'][i][0]['observation']
+                
+                if depleted_resources(obs):
+                    break
+                
+                obs['player'] = index
+                obs = dict([
+                    (k,v) for k,v in obs.items() 
+                    if k in ['step', 'updates', 'player', 'width', 'height']
+                ])
+                obs_id = f'{ep_id}_{i}'
+                obses[obs_id] = obs
+                                
+                for action in actions:
+                    if action_is_worker(action):
+                        unit_id, label = to_label_for_worker(action)
+                        if label is not None: #transfer落とす
+                            woker_samples.append((obs_id, unit_id, label))
+                    elif action_is_citytile(action): 
+                         unit_id, label = to_label_for_citytile(action)
+                         citytile_samples.append((obs_id, unit_id, label))
+                    else: #cart
+                        unit_id = None
+                        label = None
+
+    return obses, woker_samples, citytile_samples
 
 
 if __name__ == "__main__":
@@ -435,33 +489,31 @@ if __name__ == "__main__":
     seed = 42
     seed_everything(seed)
 
-    
-
     episode_dir = '/home/ubuntu/work/codes/imitation_learning/archive'
     submit_ids = get_all_submit_ids(episode_dir)
     max_scores = []
     for submit_id in submit_ids:
-        max_score = get_max_score(submit_id)
+        max_score = get_max_score(submit_id, episode_dir)
         max_scores.append(max_score)
         # print(f"max score is {max_score} of {submit_id}")
     max_scores_df = pd.DataFrame([submit_ids, max_scores]).T
     max_scores_df.columns = ["submissionId", "max_score"]
     max_scores_df = max_scores_df.sort_values("max_score",ascending=False)
-    obses, woker_samples, citytile_samples = create_dataset_from_submit_id(submit_id[0])
+    obses, woker_samples, citytile_samples = create_dataset_from_submit_id("22777661", episode_dir)
 
 
-    # obses, woker_samples, citytile_samples = create_dataset_from_json(episode_dir)
-    # print('obses:', len(obses), 'woker_samples:', len(woker_samples), 'citytile_samples:', len(citytile_samples))
+    obses, woker_samples, citytile_samples = create_dataset_from_json(episode_dir)
+    print('obses:', len(obses), 'woker_samples:', len(woker_samples), 'citytile_samples:', len(citytile_samples))
 
-    # woker_labels = [sample[-1] for sample in woker_samples]
-    # actions = ['north', 'south', 'west', 'east', 'bcity']
-    # for value, count in zip(*np.unique(woker_labels, return_counts=True)):
-    #     print(f'{actions[value]:^5}: {count:>3}')
+    woker_labels = [sample[-1] for sample in woker_samples]
+    actions = ['north', 'south', 'west', 'east', 'bcity']
+    for value, count in zip(*np.unique(woker_labels, return_counts=True)):
+        print(f'{actions[value]:^5}: {count:>3}')
 
-    # citytile_labels = [sample[-1] for sample in citytile_samples]
-    # actions = ['research', 'build_worker', 'build_cart']
-    # for value, count in zip(*np.unique(citytile_labels, return_counts=True)):
-    #     print(f'{actions[value]:^5}: {count:>3}')
+    citytile_labels = [sample[-1] for sample in citytile_samples]
+    actions = ['research', 'build_worker', 'build_cart']
+    for value, count in zip(*np.unique(citytile_labels, return_counts=True)):
+        print(f'{actions[value]:^5}: {count:>3}')
 
 # model = LuxNet_worker()
 # train, val = train_test_split(woker_samples, test_size=0.1, random_state=42, stratify=woker_labels)
@@ -505,10 +557,10 @@ if __name__ == "__main__":
 
 # train_model(model, dataloaders_dict, criterion, optimizer, num_epochs=1, model_type="citytile")
 
-from kaggle_environments import make
+# from kaggle_environments import make
 
-env = make("lux_ai_2021", configuration={"width": 24, "height": 24, "loglevel": 2, "annotations": True}, debug=False)
-steps = env.run(['agent.py', 'agent.py'])
+# env = make("lux_ai_2021", configuration={"width": 24, "height": 24, "loglevel": 2, "annotations": True}, debug=False)
+# steps = env.run(['agent.py', 'agent.py'])
 # env.render(mode="ipython", width=1200, height=800)
 
 pass
