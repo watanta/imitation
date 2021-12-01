@@ -272,24 +272,27 @@ def make_input_citytile(obs, unit_id):
 
 
 def rotate_state_and_action(state, action, degree):
-    if degree == 0:
-        offset = 0
-    elif degree == 90:
-        offset = 1
-    elif degree == 180:
-        offset = 2
-    elif degree == 270:
-        offset = 3
-    # stateを右にdegree回す
-    rotated_state = np.rot90(state, offset).copy()
+    if degree is None:
+        return state, action
+    else:
+        if degree == 0:
+            offset = 0
+        elif degree == 90:
+            offset = 1
+        elif degree == 180:
+            offset = 2
+        elif degree == 270:
+            offset = 3
+        # stateを右にdegree回す
+        rotated_state = np.rot90(state, offset, axes=(1,2)).copy()
 
-    # action変換
-    actions = [0, 2, 1, 3] #["n", "e", "s", "w"]
-    x = collections.deque(actions)
-    x.rotate(-actions.index(action) - offset)
-    rotated_action = x[0]
+        # action変換
+        actions = [0, 2, 1, 3] #["n", "e", "s", "w"]
+        x = collections.deque(actions)
+        x.rotate(-actions.index(action) - offset)
+        rotated_action = x[0]
 
-    return rotated_state, rotated_action
+        return rotated_state, rotated_action
 
 
 class LuxDataset_worker(Dataset):
@@ -514,7 +517,7 @@ def add_rotate_marker(samples):
     new_samples = []
     for sample in samples:
         action = sample[-1]
-        if action in [0,1,2,3]:
+        if action not in [0,1,2,3]:
             new_samples.append(sample + tuple([None]))
         else:
             for marker in rotate_makers:
